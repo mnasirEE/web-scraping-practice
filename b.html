@@ -1,0 +1,1377 @@
+<div class="container-fluid" id="contentBody">
+        
+
+
+
+<div class="mainContent ml-0" style="width:100%">
+    <script type="text/javascript">
+		var isTest = false;
+		var link = "";
+		var EN = null;
+        var search = new Object();
+        var pageSize = 25;
+        var pageNumber = 1;
+        var cnt = 0;
+        var cntAttorney = 0;
+        var tabFocus = "Attorney";
+        
+	    $(document).ready(function () {
+			if (isTest)
+			{
+                link = "https://api.dev.azbar.org/";
+                loginLink = "https://login.dev.azbar.org/";
+			}
+			else
+			{
+			    link = "https://api-proxy.azbar.org/";
+                loginLink = "https://login.azbar.org/";
+			}
+
+			document.getElementById("lnkLogInLink").href = loginLink + "?ReturnURL=" + window.location.href;
+			
+			var m = getUrlVars()["m"];
+
+			if (m === undefined)
+			{
+			    $("#divProfileScreen").hide();
+			    $("#divSearchScreen").show();
+			    InitSearchScreen();
+			}
+			else
+			{
+			    m = $.trim(m);
+			    m = Right(m, (m.length - m.lastIndexOf("-") - 1));			    
+			    $("#divSearchScreen").hide();
+			    $("#divProfileScreen").show();
+			    InitProfileScreen(m);
+			}
+
+			EN = GetEntityNumber();
+
+			if (EN !== undefined)
+			{
+			    $("#hdnEN").val(EN);
+			    $("#divLogInNotice").hide();
+			}
+
+			$(".Search").keypress(function (event) {
+			    if (event.keyCode === 13) {
+			        $("#btnSearch").click();
+			    }
+            });
+
+            $('[data-toggle="tooltip"]').tooltip();
+	    });
+
+	    function InitProfileScreen(id)
+	    {	        
+	        LoadProfile(id, "");
+	    }
+
+	    function InitSearchScreen()
+	    {	        
+	        search.FirstName = "";
+	        search.MiddleName = "";
+	        search.LastName = "";	        
+	        search.Firm = "";
+	        search.City = "";
+	        search.State = "";
+	        search.Zip = "";
+	        search.County = "";
+	        search.LanguageCode = "";
+	        search.LawSchool = "";
+	        search.Section = "";
+	        search.Specialization = "";
+	        search.IncludeDeceased = false;
+
+	        LoadStates();
+            LoadCounties();
+            LoadJurisdictions();
+	        LoadLanguages();
+	        LoadLawSchools();
+	        LoadSpecializations();
+	        LoadSections();
+
+	        $('#modalDetails').on('show.bs.modal', function (e) {
+	            if (e.target.id == 'modalDetails') {
+	                LoadProfile($(e.relatedTarget).data("id"), "Search");
+	            }
+	        })
+        }
+
+        function SetSearch(isLpSearch) {
+            if (isLpSearch) {
+                tabFocus = "LP";
+            }
+            else {
+                tabFocus = "Attorney";
+            }
+
+            Search(isLpSearch);
+        }
+
+        function Search(isLpSearch)
+        {	                 
+            pageNumber = 1;
+            cnt = 0;
+            cntAttorney = 0;
+
+            if (tabFocus === "LP") {
+                isLpSearch = true;
+            }
+
+            $("#divResults").html("");           
+
+	        search.FirstName = $.trim($("#txtFirstName").val());	        
+	        search.LastName = $.trim($("#txtLastName").val());
+            search.FuzzySearch = !$("#chkExactMatch").is(":checked");
+	        search.Firm = $.trim($("#txtFirm").val());
+	        search.City = $.trim($("#txtCity").val());
+	        search.State = $.trim($("#lstState").val());
+	        search.Zip = $.trim($("#txtZip").val());	        
+            search.County = $.trim($("#lstCounty").val());
+            search.JurisdictionCode = $.trim($("#lstJurisdiction").val());
+	        search.LanguageCode = $.trim($("#lstLanguage").val());
+	        search.LawSchool = $.trim($("#lstLawSchool").val());
+	        search.Section = $.trim($("#lstSection").val());
+	        search.Specialization = $.trim($("#lstSpecialization").val());
+            search.IncludeDeceased = $("#chkIncludeDeceased").is(":checked");
+            search.LegalNeed = $.trim($("#txtLegalNeed").val());
+	        
+	        if (ValidateSearch(search))
+            {	                   
+                var reults = GetSearchResults(isLpSearch);
+	        }
+	        else
+	        {
+	            alert("No search criteria entered");
+	        }
+	    }
+
+        function GetSearchResults(isLpSearch)
+	    {	        
+            var contents = "";
+            var contentsAttorney = "";
+            var showMoreButton = "";
+
+            if (isLpSearch) {
+                showMoreButton = "btnShowMoreLPs";
+            }
+            else {
+                showMoreButton = "btnShowMoreAttorneys";                
+            }  
+
+            $("#" + showMoreButton).hide();
+
+            if (pageNumber === 1) {
+                $("#imgPleaseWait").show();                
+            }
+            else {
+                $("#" + showMoreButton).html("Please wait...").show();
+            }             
+
+            search.IsLpSearch = isLpSearch;
+
+            GetDataASYNC(link + "MemberSearch/Search/?PageSize=" + pageSize + "&Page=" + pageNumber + "&RequestorEntityNumber=" + EN, "POST", search, function (results) {
+
+	            if (!jQuery.isEmptyObject(results) && results.IsSuccess) {
+                    if (results.IsResult) {                        
+                        $.each(results.Result.Results, function (index, item) {
+                            if (item.IsAttorney) {
+                                contentsAttorney += GetRecord(item);
+                                cntAttorney++;
+                            }
+                            else {
+                                contents += GetRecord(item);
+                                cnt++;
+                            }
+
+                            if (parseInt(results.Result.TotalCount) > parseInt(pageSize)) {
+                                $("#" + showMoreButton).show();
+                            }
+                            else {
+                                $("#" + showMoreButton).hide();
+                            }
+                        });
+                    }
+                    else {
+                        contents += "<span style='color:red;'>" + results.Error + "</span>";
+                        contentsAttorney += "<span style='color:red;'>" + results.Error + "</span>";
+                    }                    
+                   
+                    if (isLpSearch) {
+                        $("#divLegalParaprofessionalRecordsCount").text("Showing " + cnt + " of " + results.Result.TotalCount + " legal paraprofessional record(s)");
+                    }
+                    else {                    
+                        $("#divAttorneyRecordsCount").text("Showing " + cntAttorney + " of " + results.Result.TotalCount + " attorney record(s)");
+                    }                    
+	            }
+	            else {
+	                contents += "<span style='color:red;'>There are no attorneys matching your criteria</span>";
+	            }	            
+
+                if (pageNumber === 1) {
+                    $("#imgPleaseWait").hide();
+                }
+                else {
+                    $("#" + showMoreButton).html("Show More Results");
+                }
+
+                if (pageNumber === 1) {
+
+                    if (isLpSearch) {
+                        $("#divResults").html(contents);
+                    }
+                    else {
+                        $("#divResultsAttorney").html(contentsAttorney);
+                    }                                       
+                }
+                else {
+
+                    if (isLpSearch) {
+                        $("#divResults").append(contents);
+                    }
+                    else {
+                        $("#divResultsAttorney").append(contentsAttorney);
+                    }                    
+                }
+
+                $("#divContentsResults").show();
+	        });	        
+        }
+
+        function ShowMore(isLpSearch) {
+            pageNumber++;
+            GetSearchResults(isLpSearch);
+        }
+
+        function GetRecord(item) {
+            var contents = "";
+
+            var profilePic = "https://membertools.azbar.org/dashboard/images/noImageUploaded.gif";
+            if (NullToString(item.ProfilePicUrl) !== "") {
+                profilePic = $.trim(item.ProfilePicUrl);
+            }
+
+            contents += "<div class='row' style='border-bottom:solid 1px #e7e7e7;padding-top:4px;'>";
+            contents += "<div class='col-sm-2'><img style='width:100%;' src='" + profilePic + "' /></div>";
+            contents += "<div class='col-sm-4'><h4>" + item.FirstName + " " + item.LastName + "</h4>";
+            contents += "<span style='font-size:.8em;'>" + item.MemberStatus + "</span><br />";
+
+            if (item.IsProBonoCounsel) {
+                contents += "<span style='font-size:.8em;'>Certified Pro Bono Counsel</span><br />";
+            }
+
+            contents += "<br />";
+
+            contents += "<button type='button' class='btn btn-primary btn-sm' data-id='" + item.EntityNumber + "' data-toggle='modal' data-target='#modalDetails'>View Profile</button>";
+
+            contents += "</div>";
+            contents += "<div class='col-sm-6'>";
+
+            if ($.trim(item.Company) !== "") {
+                contents += item.Company + "<br />";
+            }
+
+            if ($.trim(item.Address.Address1) !== "") {
+                contents += item.Address.Address1 + "<br />";
+            }
+
+            if ($.trim(item.Address.Address2) !== "") {
+                contents += item.Address.Address2 + "<br />";
+            }
+
+            if ($.trim(item.Address.City) !== "") {
+                contents += item.Address.City + ", ";
+            }
+
+            if ($.trim(item.Address.State) !== "") {
+                contents += item.Address.State + " ";
+            }
+
+            if ($.trim(item.Address.Zip) !== "") {
+                contents += item.Address.Zip;
+            }            
+
+            if ($.trim(item.PhoneNumbers) !== "") {
+                contents += "<br />";
+                var phns = "";
+
+                $.each(item.PhoneNumbers, function (index, item) {
+                    phns += item + "<br />";
+                });
+
+                contents += phns;
+            }
+
+            if ($.trim(item.Email) !== "") {
+                contents += "<br />" + item.Email;
+            }
+
+            contents += "</div>";
+            contents += "</div>";   //end row 
+
+            return contents;
+        }
+
+	    function ValidateSearch(search)
+	    {
+	        var isOk = false;
+
+	        if (search.FirstName !== "")
+	        {
+	            isOk = true;
+	        }
+
+	        if (search.MiddleName !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.LastName !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.Firm !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.City !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.State !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.Zip !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.County !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.Language !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.LawSchool !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.Section !== "") {
+	            isOk = true;
+	        }
+
+	        if (search.Specialization !== "") {
+	            isOk = true;
+	        }
+
+	        return isOk;
+	    }
+
+	    function ShowMoreOptions()
+	    {
+	        if ($("#spnMoreOptionsLabel").text() === "+")
+	        {
+	            $("#spnMoreOptionsLabel").text("-");
+	            $('#divMoreOptions').show('slow');
+	        }
+	        else
+	        {
+	            $("#spnMoreOptionsLabel").text("+");
+	            $("#MoreOptions").val("");
+	            $('#divMoreOptions').hide('slow');	            
+	        }	        
+	    }
+
+	    function LoadProfile(id, type)
+	    {
+	        ClearProfileElements();
+
+	        var result = GetProfileById(id);
+            
+	        if (result.IsSuccess)
+            {                
+	            var item = result.Result;
+
+	            $("#" + type + "DetailsLabel").text(NullToString(item.NamePrefix) + " " + item.FirstName + " " + NullToString(item.MiddleName) + " " + item.LastName + " " + NullToString(item.NameSuffix));
+	            $("#spn" + type + "ProfileCompany").text(item.Company);
+
+	            var address = "";
+
+	            if ($.trim(item.Address.Address1) !== "")
+	            {
+	                address += item.Address.Address1 + "<br />";
+	            }
+
+	            if ($.trim(item.Address.Address2) !== "") {
+	                address += item.Address.Address2 + "<br />";
+	            }
+
+	            if ($.trim(item.Address.City) !== "") {
+	                address += item.Address.City + ", ";
+	            }
+
+	            if ($.trim(item.Address.State) !== "") {
+	                address += item.Address.State + " ";
+	            }
+
+	            if ($.trim(item.Address.Zip) !== "") {
+	                address += item.Address.Zip + " ";
+	            }
+
+	            if ($.trim(item.Address.County) !== "") {
+	                address += "<br />" + item.Address.County + " County";
+	            }
+
+	            $("#spn" + type + "ProfileAddress").html(address);
+	            
+                if ($.trim(item.PhoneNumbers) !== "") {
+                    var phns = "";
+
+                    $.each(item.PhoneNumbers, function (index, item) {
+                        phns += item + "<br />";
+                    });                    
+
+                    $("#spn" + type + "ProfilePhone").html(phns);
+                }
+                
+                if (item.Specializations.length > 0) {                                    
+                    $("#spn" + type + "ProfileSpecialistImage").html("<img style='width:100%;' src='https://www.azbar.org/media/qmbbagpv/az-board-certified-specialist-1.png' />");
+                }
+
+	            if ($.trim(item.Email) !== "") {
+	                $("#spn" + type + "ProfileEmail").html("<i class='fas fa-envelope'></i>&nbsp;&nbsp;&nbsp;" + item.Email);
+	            }	            
+	            
+	            if (NullToString(item.ProfilePicUrl) !== "" && item.BillCode !== "0")
+	            {	                
+	                $("#spn" + type + "ProfilePhoto").html("<img style='width:100%;' src='" + $.trim(item.ProfilePicUrl) + "' />");
+	            }
+
+	            var discipline = "None";
+
+	            if ($.trim(item.DisciplineHTML) !== "")
+	            {
+	                discipline = item.DisciplineHTML;
+	            }
+	            $("#div" + type + "ProfileDiscipline").html(discipline);
+	            	            
+	            $("#spn" + type + "ProfileStatus").html(item.MemberStatus + " <span data-toggle='tooltip' title='" + item.MemberStatusToolTip + "'><i class='fa fa-question-circle'></i></span>");
+
+                if (item.IsProBonoCounsel) {
+                    $("#spn" + type + "CertifiedProBonoCounsel").html("Certified Pro Bono Counsel<br />").show();
+                }
+                else {
+                    $("#spn" + type + "CertifiedProBonoCounsel").html("Certified Pro Bono Counsel<br />").hide();                    
+                }
+                
+                var azAdmitDate = "";
+                if (item.AzAdmitDate !== null && item.AzAdmitDate !== "") {
+
+                    var d = new Date(item.AzAdmitDate);
+
+                    azAdmitDate = (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+                }
+
+                if (item.BillCode === "L" || item.BillCode === "K") {
+                    $(".LicensedAdmittedAdmitYear").text("Licensed");
+                    $(".LicensedAdmittedAZAdmit").text("Licensed");
+                    $(".LicensedAdmittedD").text("License ");
+                    $(".divLicenseArea").show();
+                }
+                else {
+                    $(".LicensedAdmittedAdmitYear").text("Admitted to Practice Law");
+                    $(".LicensedAdmittedAZAdmit").text("Admitted to");
+                    $(".LicensedAdmittedD").text("License");
+                    $(".divLicenseArea").hide();
+                }
+
+                $("#spn" + type + "ProfileAdmitYear").text(item.AdmittedYear);
+                $("#spn" + type + "ProfileAZAdmit").text(azAdmitDate);
+
+                if (item.LicenseAreas.length > 0) {
+                    var licenseAreas = "";
+
+                    $.each(item.LicenseAreas, function (index, i) {
+                        licenseAreas += i + ", ";
+                    });
+                    licenseAreas = Left($.trim(licenseAreas), ($.trim(licenseAreas).length - 1));
+                }
+                
+                $("#spn" + type + "ProfileLicenseArea").text(licenseAreas);
+	            $("#spn" + type + "ProfileInsurance").html(item.LiabilityInsuranceDescription + " <span data-toggle='tooltip' title='" + item.LiabilityInsuranceToolTip + "'><i class='fa fa-question-circle'></i></span>");
+                $("#spn" + type + "ProfileLawSchool").text(NullToString(item.LawSchool));
+                
+                var languages = "";
+                if (item.Languages.length > 0) {
+                    $.each(item.Languages, function (index, item) {
+                        languages += item + ", ";
+                    });
+                    languages = Left($.trim(languages), ($.trim(languages).length - 1));
+                }
+                else {
+                    languages = "None";
+                }
+                $("#spn" + type + "ProfileLanguages").text(languages);
+
+                
+                if (item.BillCode !== "0") {
+
+                    if ($.trim(item.Bio) !== "") {
+                        $("#spnSearchProfileBiography").html(item.Bio);
+                        $("#divAZBioContents").html(item.Bio);                        
+                    }
+                                                           
+                    if (Object.keys(item.AreasOfLawAndPractice).length > 0) {
+                        var areas = "";
+
+                        $.each(Object.keys(item.AreasOfLawAndPractice), function (index, a) {
+                            areas += "<b>" + a + "</b><br />";
+
+                            $.each(item.AreasOfLawAndPractice[a], function (index, p) {
+
+                                areas += p + ", ";
+                            });
+
+                            areas = Left($.trim(areas), ($.trim(areas).length - 1));
+
+                            areas += "<br /><br />";
+                        });
+
+                        $("#divAreasOfLaw").show();
+                        $("#spnSearchProfileAreasOfLaw").html(areas);
+                    }
+                    
+                    $("#spn" + type + "ProfileAcceptsCreditCards").text(item.AcceptsCC ? "Yes" : "No");
+                    $("#spn" + type + "ProfileFreeConsultations").text(item.FreeConsultations ? "Yes" : "No");
+                    $("#spn" + type + "ProfileTypicalHourlyRate").text(FormatCurrency(item.HourlyRate, true));
+                    $("#spn" + type + "ProfileTypicalFixedFee").text(FormatCurrency(item.FixedFee, true));
+                    $("#spn" + type + "ProfileTypicalContingencyFee").text(FormatCurrency(item.ContingencyFee, true));
+                    $("#divAdditionalInfo").show();
+                }
+
+	            var jurisdictions = "";
+	            if (item.Jurisdictions.length > 0)
+	            {
+	                $.each(item.Jurisdictions, function (index, item) {
+	                    jurisdictions += item + ", ";
+	                });
+	                jurisdictions = Left($.trim(jurisdictions), ($.trim(jurisdictions).length - 1));	                
+	            }
+	            else {
+	                jurisdictions = "None";
+	            }
+	            $("#spn" + type + "ProfileJurisdictions").text(jurisdictions);
+
+	            var specializations = "";
+	            if (item.Specializations.length > 0)
+	            {
+	                $.each(item.Specializations, function (index, item) {
+	                    specializations += item + ", ";
+	                });
+
+	                specializations = Left($.trim(specializations), ($.trim(specializations).length - 1));
+	            }
+	            else
+	            {
+	                specializations = "None";
+	            }
+	            $("#spn" + type + "ProfileSpecializations").html(specializations + " <span data-toggle='tooltip' title='" + item.SpecializationToolTip + "'><i class='fa fa-question-circle'></i></span>");
+
+	            var sections = "";
+	            if (item.Sections.length > 0) {
+	                $.each(item.Sections, function (index, item) {
+                        sections += item + ", ";
+                    });	     
+
+                    sections = Left($.trim(sections), ($.trim(sections).length - 1));
+	            }
+	            else {
+	                sections = "None";
+	            }
+	            $("#spn" + type + "ProfileSections").html(sections);
+
+	            if (type === "Search")
+	            {
+	                $("#divLink").html("<a href='?m=" + StripValue(item.FirstName) + "-" + StripValue(item.LastName) + "-" + item.EntityNumber + "' target='_blank'>View in new window</a>");
+	            }
+
+	            $('[data-toggle="tooltip"]').tooltip();
+	        }
+	    }
+
+	    function StripValue(val)
+	    {
+	        val = $.trim(val).replace(/ /g, '-');
+	        val = val.replace(/'/g, '');
+	        return val.toLowerCase();
+	    }
+
+	    function ClearProfileElements() {
+	        $(".ProfileElement").text("").html("");
+
+	    }
+
+	    function GetProfileById(id)
+	    {
+	        return GetData(link + "MemberSearch/Search?EntityNumber=" + id + "&RequestorEntityNumber=" + EN, "GET", {});
+        }
+    </script>
+
+
+    <p>&nbsp;</p><p>&nbsp;</p>
+    <div class="container-fluid">
+        <div id="divSearchScreen" style=""><input type="hidden" id="hdnEN">
+            <div class="row">
+                <div class="col-sm-6" style="border-right:solid 1px #e7e7e7;">
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <!----https://login.azbar.org---->
+                            <div id="divLogInNotice">Are you an Arizona attorney? <a id="lnkLogInLink" href="https://login.azbar.org/?ReturnURL=https://www.azbar.org/for-lawyers/practice-tools-management/member-directory/">Log in here</a> to see additional member profile details.</div>
+                        </div>
+                    </div><p>&nbsp;</p>
+                    <div class="row">
+                        <div class="col-sm-4">
+                            <label for="txtFirstName">First Name</label>
+                        </div>
+                        <div class="col-sm-8">
+                            <input type="text" class="form-control Search" id="txtFirstName" maxlength="20">
+                        </div>
+                    </div><br>
+                    <div class="row">
+                        <div class="col-sm-4">
+                            <label for="txtLastName">Last Name</label>
+                        </div>
+                        <div class="col-sm-8">
+                            <input type="text" class="form-control Search" id="txtLastName" maxlength="50">
+                        </div>
+                    </div><br>
+
+                    <div class="row">
+                        <div class="col-sm-4">&nbsp;</div>
+                        <div class="col-sm-8">
+                            <input type="checkbox" id="chkExactMatch" checked="checked"> Exact match
+                        </div>
+                    </div><br>
+
+                    <!--<div class="row">
+        <div class="col-sm-12 text-center"><a href="#!" onclick="ShowMoreOptions();"><span id="spnMoreOptionsLabel">+</span> more options</a><p>&nbsp;</p></div>
+    </div>-->
+                          <div class="container">
+                              <div class="row" style="border:solid 1px black;">
+                                  <div class="col-sm-12" style="font-weight:bold;">Member of the public? Search for Arizona lawyers here:</div>
+                              </div><br>
+                          </div>
+                    <!--<div id="divMoreOptions" style="display:none;"><hr />-->
+                    <div id="divMoreOptions">
+
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="txtLegalNeed">Your Legal Need<br><span style="font-size:.8em;">(focus, specialty, or keyword)</span></label>
+                            </div>
+                            <div class="col-sm-4">
+                                <input type="text" class="form-control MoreOptions Search" id="txtLegalNeed" maxlength="50">
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="lstSpecialization">Board Certified Specialization</label>&nbsp;<span data-toggle="tooltip" title="" data-original-title="Board Certified Specialists are lawyers who have been recognized by the State Bar as demonstrating superior knowledge, skill, integrity, professionalism and competence in a specific area of law."><svg class="svg-inline--fa fa-question-circle fa-w-16" aria-hidden="true" focusable="false" data-prefix="fa" data-icon="question-circle" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" data-fa-i2svg=""><path fill="currentColor" d="M504 256c0 136.997-111.043 248-248 248S8 392.997 8 256C8 119.083 119.043 8 256 8s248 111.083 248 248zM262.655 90c-54.497 0-89.255 22.957-116.549 63.758-3.536 5.286-2.353 12.415 2.715 16.258l34.699 26.31c5.205 3.947 12.621 3.008 16.665-2.122 17.864-22.658 30.113-35.797 57.303-35.797 20.429 0 45.698 13.148 45.698 32.958 0 14.976-12.363 22.667-32.534 33.976C247.128 238.528 216 254.941 216 296v4c0 6.627 5.373 12 12 12h56c6.627 0 12-5.373 12-12v-1.333c0-28.462 83.186-29.647 83.186-106.667 0-58.002-60.165-102-116.531-102zM256 338c-25.365 0-46 20.635-46 46 0 25.364 20.635 46 46 46s46-20.636 46-46c0-25.365-20.635-46-46-46z"></path></svg><!-- <i class="fa fa-question-circle"></i> --></span>
+                            </div>
+                            <div class="col-sm-8">
+                                <select id="lstSpecialization" class="form-control MoreOptions Search"><option value=""> - any - </option><option value="AL">Administrative Law</option><option value="BY">Bankruptcy Law</option><option value="CD">Construction Defect Law</option><option value="CR">Criminal Law</option><option value="ET">Estate &amp; Trust Law</option><option value="FL">Family Law</option><option value="PI">Injury &amp; Wrongful Death Litigation</option><option value="RE">Real Estate Law</option><option value="TX">Tax Law</option><option value="WC">Workers' Compensation Law</option></select>
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="lstJurisdiction">Jurisdiction</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <select id="lstJurisdiction" class="form-control MoreOptions Search"><option value=""> - any - </option><option value="0002">Alabama</option><option value="0003">Alaska</option><option value="0004">Arkansas</option><option value="0007">California</option><option value="0011">Colorado</option><option value="0012">Connecticut</option><option value="0107">Delaware</option><option value="0014">District of Columbia</option><option value="0021">Florida</option><option value="0024">Georgia</option><option value="0114">Hawaii</option><option value="0027">Idaho</option><option value="0028">Illinois</option><option value="0030">Indiana</option><option value="0031">Iowa</option><option value="0034">Kansas</option><option value="0035">Kentucky</option><option value="0036">Louisiana</option><option value="0039">Maine</option><option value="0040">Maryland</option><option value="0041">Massachusetts</option><option value="0043">Michigan</option><option value="0044">Minnesota</option><option value="0285">Mississippi</option><option value="0045">Missouri</option><option value="0047">Montana</option><option value="0052">Nebraska</option><option value="0053">Nevada</option><option value="0054">New Hampshire</option><option value="0055">New Jersey</option><option value="0056">New Mexico</option><option value="0057">New York</option><option value="0058">North Carolina</option><option value="0159">North Dakota</option><option value="0062">Ohio</option><option value="0063">Oklahoma</option><option value="0066">Oregon</option><option value="0070">Pennsylvania</option><option value="0071">Rhode Island</option><option value="0073">South Carolina</option><option value="0074">South Dakota</option><option value="0075">Tennessee</option><option value="0076">Texas</option><option value="0079">Utah</option><option value="0080">Vermont</option><option value="0081">Virginia</option><option value="0085">Washington</option><option value="0086">West Virginia</option><option value="0088">Wisconsin</option><option value="0197">Wyoming</option><option value="0431">American Samoa</option><option value="0025">Guam</option><option value="0348">Mariana Islands</option><option value="0173">Puerto Rico</option><option value="0275">Virgin Islands</option><option value="0204">1st Circuit</option><option value="0251">2nd Circuit</option><option value="0382">3rd Circuit</option><option value="0224">4th Circuit</option><option value="0337">5th Circuit</option><option value="0355">6th Circuit</option><option value="0398">7th Circuit</option><option value="0267">8th Circuit</option><option value="0276">9th Circuit</option><option value="0344">10th Circuit</option><option value="0365">11th Circuit</option><option value="0427">Federal Court</option><option value="0438">US Bankruptcy Court</option><option value="0217">US Claims Court</option><option value="455 ">US Court of Appeals for the Federal Circuit</option><option value="0010">US Court of Federal Claims</option><option value="0437">US District Court</option><option value="0439">US Patent &amp; Trademark Office</option><option value="0421">US Supreme Court</option><option value="0312">US Tax Court</option><option value="0403">Apache Tribal Court</option><option value="0209">Cocopah Tribal Court</option><option value="0326">Colorado River Tribal Court</option><option value="0148">Fort McDowell Yavapai Nation Tribal Court</option><option value="0339">Gila River Tribal Court</option><option value="0362">Hopi Nation Tribal Court</option><option value="0227">Hualapai Havasupai Tribal Court</option><option value="0452">Kickapoo Tribal Court</option><option value="0336">Menominee Tribal Court</option><option value="0050">Navajo Nation Tribal Court</option><option value="0216">Pascua Yaqui Tribal Court</option><option value="0245">Prairie Tribal Court</option><option value="0149">Salt River Pima-Maricopa Indian Community</option><option value="0434">San Carlos Apache Tribal Court</option><option value="0147">Tohono O'odham Nation Tribal Court</option><option value="0296">Upper Sioux Tribal Court</option><option value="0266">Ute Mountain Ute Tribal Court</option><option value="0256">White Mountain Apache Tribal Court</option><option value="0453">Yavapai- Apache Nation Tribal Court</option><option value="0095">Alberta, Canada</option><option value="0099">British Columbia, Canada</option><option value="463 ">Manitoba, Canada</option><option value="0432">New Brunswick, Canada</option><option value="464 ">Newfoundland and Labrador, Canada</option><option value="465 ">Nova Scotia, Canada</option><option value="0064">Ontario, Canada</option><option value="466 ">Prince Edward Island, Canada</option><option value="467 ">Quebec, Canada</option><option value="468 ">Saskatchewan, Canada</option></select>
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="lstLanguage">Language</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <select id="lstLanguage" class="form-control MoreOptions Search"><option value=""> - any - </option><option value="2">Afrikaans</option><option value="79">Albanian</option><option value="67">Amharic</option><option value="48">Apache</option><option value="34">Arabic</option><option value="69">Aramaic</option><option value="29">Armenian</option><option value="28">Aymara</option><option value="38">Bengali</option><option value="71">Bosnian</option><option value="49">Brazilian</option><option value="77">Bulgarian</option><option value="50">Cantonese</option><option value="81">Cebuano</option><option value="3">Chinese</option><option value="66">Croatian</option><option value="4">Czech</option><option value="5">Danish</option><option value="6">Dutch</option><option value="52">Estonian</option><option value="42">Farsi</option><option value="25">Fijian</option><option value="32">Finnish</option><option value="45">Flemish</option><option value="7">French</option><option value="36">Gaelic</option><option value="8">German</option><option value="9">Greek</option><option value="55">Guarani</option><option value="10">Gujarati- India</option><option value="72">Haitian Creole</option><option value="22">Hebrew</option><option value="39">Hindi</option><option value="11">Hungarian</option><option value="46">Igbo (Nigerian Language)</option><option value="57">Indonesian</option><option value="12">Italian</option><option value="13">Japanese</option><option value="37">Korean</option><option value="78">Kurdish</option><option value="65">Laotian</option><option value="51">Latin</option><option value="63">Latvian</option><option value="80">Lithuanian</option><option value="76">Macedonian</option><option value="59">Malayalam</option><option value="56">Mandarin</option><option value="24">Maori</option><option value="27">Navajo</option><option value="14">Norwegian</option><option value="74">O'Odham</option><option value="60">Papago</option><option value="68">Persian</option><option value="15">Polish</option><option value="16">Portuguese</option><option value="73">Punjabi</option><option value="40">Quiche</option><option value="47">Romanian</option><option value="17">Russian</option><option value="31">Serbo/Croatian</option><option value="23">Sign Language</option><option value="54">Sinhala</option><option value="64">Slovak</option><option value="18">Spanish</option><option value="41">Swahili</option><option value="19">Swedish</option><option value="70">Tagalog</option><option value="33">Tahitian</option><option value="58">Taiwanese</option><option value="53">Tamil</option><option value="75">Telugu</option><option value="35">Thai</option><option value="44">Tongan</option><option value="43">Turkish</option><option value="83">Twi</option><option value="26">Ukrainian</option><option value="62">Urdu (Pakistan)</option><option value="61">Vietnamese</option><option value="82">Visayan</option><option value="21">Yiddish</option><option value="30">Yugoslavian</option></select>
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="txtFirm">Firm/Company</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <input type="text" class="form-control MoreOptions Search" id="txtFirm" maxlength="100">
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="txtCity">City</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <input type="text" class="form-control MoreOptions Search" id="txtCity" maxlength="40">
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="lstState">State</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <select id="lstState" class="form-control MoreOptions Search"><option value=""> - any - </option><option value="AL">Alabama</option><option value="AK">Alaska</option><option value="AS">American Samoa</option><option value="AZ">Arizona</option><option value="AR">Arkansas</option><option value="AA">Armed Forces Americas</option><option value="AE">Armed Forces Europe</option><option value="AP">Armed Forces Pacific</option><option value="CA">California</option><option value="CO">Colorado</option><option value="CT">Connecticut</option><option value="DE">Delaware</option><option value="FL">Florida</option><option value="GA">Georgia</option><option value="GU">Guam</option><option value="HI">Hawaii</option><option value="ID">Idaho</option><option value="IL">Illinois</option><option value="IN">Indiana</option><option value="IA">Iowa</option><option value="KS">Kansas</option><option value="KY">Kentucky</option><option value="LA">Louisiana</option><option value="ME">Maine</option><option value="MD">Maryland</option><option value="MA">Massachussetts</option><option value="MI">Michigan</option><option value="MN">Minnesota</option><option value="MS">Mississippi</option><option value="MO">Missouri</option><option value="MT">Montana</option><option value="NE">Nebraska</option><option value="NV">Nevada</option><option value="NH">New Hampshire</option><option value="NJ">New Jersey</option><option value="NM">New Mexico</option><option value="NY">New York</option><option value="NC">North Carolina</option><option value="ND">North Dakota</option><option value="MP">Northern Mariana Islands</option><option value="OH">Ohio</option><option value="OK">Oklahoma</option><option value="OR">Oregon</option><option value="PW">Palau</option><option value="PA">Pennsylvania</option><option value="PR">Puerto Rico</option><option value="RI">Rhode Island</option><option value="SC">South Carolina</option><option value="SD">South Dakota</option><option value="TN">Tennessee</option><option value="TX">Texas</option><option value="UT">Utah</option><option value="VT">Vermont</option><option value="VI">Virgin Islands</option><option value="VA">Virginia</option><option value="WA">Washington</option><option value="DC">Washington DC</option><option value="WV">West Virginia</option><option value="WI">Wisconsin</option><option value="WY">Wyoming</option><option value="AB">Alberta</option><option value="BC">British Columbia</option><option value="MB">Manitoba</option><option value="NB">New Brunswick</option><option value="NL">Newfoundland and Labrador</option><option value="NT">Northwest Territories</option><option value="NS">Nova Scotia</option><option value="NU">Nunavut</option><option value="ON">Ontario</option><option value="PE">Prince Edward Island</option><option value="QC">Quebec</option><option value="SK">Saskatchewan</option><option value="YT">Yukon</option></select>
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="txtZip">Zip Code</label>
+                            </div>
+                            <div class="col-sm-4">
+                                <input type="text" class="form-control MoreOptions Search" id="txtZip" maxlength="10">
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="lstCounty">Arizona County</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <select id="lstCounty" class="form-control MoreOptions Search"><option value=""> - any - </option><option value="00">Out of State</option><option value="01">Apache</option><option value="02">Cochise</option><option value="03">Coconino</option><option value="04">Gila</option><option value="05">Graham</option><option value="06">Greenlee</option><option value="07">Maricopa</option><option value="08">Mohave</option><option value="09">Navajo</option><option value="10">Pima</option><option value="11">Pinal</option><option value="12">Santa Cruz</option><option value="13">Yavapai</option><option value="14">Yuma</option><option value="15">La Paz</option></select>
+                            </div>
+                        </div><br>
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="lstLawSchool">Law School</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <select id="lstLawSchool" class="form-control MoreOptions Search"><option value=""> - any - </option><option value="2946">Albany</option><option value="5007">American</option><option value="4215">American College - CA</option><option value="5032">Antioch</option><option value="9919">Appalachian School of Law</option><option value="4007">Arizona State</option><option value="9935">Arizona Summit Law School</option><option value="9924">Ave Maria</option><option value="9940">Barry U</option><option value="6032">Baylor</option><option value="9982">Belmont University</option><option value="7608">Blackstone Illinois</option><option value="9945">Bond University (Australia)</option><option value="3083">Boston College</option><option value="3087">Boston U</option><option value="4019">Brigham Young</option><option value="2047">Brooklyn</option><option value="9546">California Southern</option><option value="4802">California Western</option><option value="5100">Campbell</option><option value="6805">Cape Town (South Africa)</option><option value="1099">Capital</option><option value="2990">Cardozo</option><option value="1105">Case Western Reserve</option><option value="5104">Catholic-America</option><option value="8061">Chapman</option><option value="1333">Charleston School of Law</option><option value="2008">Charlotte</option><option value="2585">City U of NY</option><option value="1221">Cleveland Marshall</option><option value="8076">Cleveland State</option><option value="9926">College Management Academic</option><option value="6810">College of Wales</option><option value="2163">Columbia</option><option value="9937">Concord</option><option value="2098">Cornell</option><option value="6121">Creighton</option><option value="1302">Cumberland - Samford</option><option value="0915">Dalhousie (Canada)</option><option value="8086">DC School of Law</option><option value="5161">Delaware - Widener</option><option value="9942">Denver U</option><option value="1165">DePaul</option><option value="1168">Detroit</option><option value="8022">Detroit College</option><option value="2187">Dickinson</option><option value="6168">Drake</option><option value="9943">Drexel</option><option value="5156">Duke</option><option value="2196">Duquesne</option><option value="9976">Elon University School of Law</option><option value="5187">Emory</option><option value="4275">Empire College</option><option value="6814">England &amp; Cambridge (England)</option><option value="2006">Faulkner</option><option value="9939">Florida A&amp;M</option><option value="9938">Florida Coastal</option><option value="5219">Florida State</option><option value="2259">Fordham</option><option value="1978">Galway U (Ireland)</option><option value="5827">George Mason</option><option value="5246">George Washington</option><option value="5244">Georgetown</option><option value="5251">Georgia State</option><option value="8017">Georgia State</option><option value="4321">Glendale College</option><option value="4329">Golden Gate</option><option value="4330">Gonzaga</option><option value="3457">Harvard</option><option value="2295">Hofstra</option><option value="6804">Hon Society - Kings Inn</option><option value="5297">Howard</option><option value="1115">IIT Chicago-Kent</option><option value="9916">Indiana U</option><option value="1324">Indiana U - Bloomington</option><option value="1325">Indiana U - Indianapolis</option><option value="9920">Inter American PR</option><option value="7019">Ireland University College</option><option value="4365">John F Kennedy U</option><option value="8054">John Marshall</option><option value="5344">John Marshall - Atlanta</option><option value="1344">John Marshall - Chicago</option><option value="9931">La Verne</option><option value="4384">Lewis &amp; Clark</option><option value="1404">Lewis U - Illinois</option><option value="9933">Liberty U</option><option value="4419">Lincoln</option><option value="6373">Louisiana State</option><option value="9201">Loyola</option><option value="1412">Loyola - Chicago</option><option value="8099">Loyola - LA</option><option value="6374">Loyola - New Orleans</option><option value="4403">Loyola U - California</option><option value="1448">Marquette</option><option value="9922">Massachusetts School of Law - Andover</option><option value="7600">Massely Law - GA</option><option value="4065">McGeorge - Pacific</option><option value="0983">McGill University (Canada)</option><option value="9979">Members Concordia University School of Law</option><option value="1459">Memphis State</option><option value="5409">Mercer</option><option value="9923">Michigan State</option><option value="1332">Mississippi College</option><option value="6513">Mitchell Hamline</option><option value="4522">Monterey College</option><option value="9918">Nacional Auton</option><option value="1550">Nashville School of Law</option><option value="4557">National</option><option value="4555">New College of CA</option><option value="3288">New England</option><option value="8092">New York Law School</option><option value="9978">New York University Law School</option><option value="5495">North Carolina Central</option><option value="3667">Northeastern U</option><option value="1559">Northern IL</option><option value="1709">Northern Kentucky - Chase</option><option value="1565">Northwestern</option><option value="9999">Not Applicable</option><option value="8042">Notre Dame</option><option value="5514">Nova</option><option value="8055">Nova Southeastern</option><option value="2552">NY Law School</option><option value="2599">NYU</option><option value="1591">Ohio Northern</option><option value="1592">Ohio State</option><option value="6543">Oklahoma City U</option><option value="4234">Old College</option><option value="6552">Oral Roberts</option><option value="0894">Osgoode Hall York U (Canada)</option><option value="2644">Pace</option><option value="4615">Peninsula U</option><option value="9917">Pennsylvania State</option><option value="4326">Pepperdine</option><option value="9977">Phoenix School of Law</option><option value="8031">Puget Sound</option><option value="9928">Queens U of Belfast (Ireland)</option><option value="3716">Quinnipiac</option><option value="8105">Regent</option><option value="5787">Regent VA Beach</option><option value="9930">Rhodes U (South Africa)</option><option value="3729">Roger Williams</option><option value="9200">Rutgers</option><option value="2092">Rutgers - Camden</option><option value="2512">Rutgers - Newark</option><option value="2799">Saint Johns</option><option value="6629">Saint Louis</option><option value="6637">Saint Mary's </option><option value="5132">Saint Thomas</option><option value="9934">Samford</option><option value="4873">San Fernando Valley</option><option value="4712">San Francisco</option><option value="9984">San Joaquin College</option><option value="4149">Santa Barbara</option><option value="4851">Santa Clara</option><option value="8044">Seattle</option><option value="9402">Seattle U</option><option value="2811">Seton Hall</option><option value="9948">SMU Dedman School of Law</option><option value="8100">So Methodist</option><option value="6654">South Texas College of Law</option><option value="9946">Southern Cross University (Australia)</option><option value="1726">Southern Illinois </option><option value="6660">Southern Methodist</option><option value="6663">Southern U</option><option value="4703">Southwestern U</option><option value="8050">St Louis</option><option value="8039">St Mary's</option><option value="8109">St Mary's U</option><option value="7601">St Paul College of Law</option><option value="8036">St Thomas</option><option value="4704">Stanford</option><option value="2925">State U of NY - Buffalo</option><option value="5630">Stetson</option><option value="9941">Sturn College</option><option value="3771">Suffolk</option><option value="8082">SUNY @ Buffalo</option><option value="2823">Syracuse</option><option value="2906">Temple</option><option value="9975">Texas A&amp;M University</option><option value="6824">Texas Southern U</option><option value="6827">Texas Tech</option><option value="8080">Texas Tech</option><option value="6828">Texas Wesleyan</option><option value="9516">Thomas Jefferson</option><option value="9518">Thomas Jefferson - Western San Diego</option><option value="9947">Thurgood Marshall School of Law</option><option value="2902">Touro</option><option value="9449">Trinity Law School</option><option value="6832">Tulane</option><option value="1829">U of Akron</option><option value="1830">U of Alabama</option><option value="0967">U of Alberta (Canada)</option><option value="4832">U of Arizona</option><option value="6866">U of Arkansas - Fayetteville</option><option value="6368">U of Arkansas - Little Rock</option><option value="5810">U of Baltimore</option><option value="9944">U of Basel (Switzerland)</option><option value="0833">U of Bombay (India)</option><option value="3973">U of Bridgeport</option><option value="0965">U of British Columbia (Canada)</option><option value="9932">U of Calgary (Canada)</option><option value="9909">U of California</option><option value="4833">U of California - Berkeley</option><option value="4834">U of California - Davis</option><option value="4342">U of California - Hastings</option><option value="4837">U of California - LA</option><option value="1832">U of Chicago</option><option value="1833">U of Cincinnati</option><option value="4841">U of Colorado</option><option value="3915">U of Connecticut</option><option value="1834">U of Dayton</option><option value="4842">U of Denver</option><option value="1835">U of Detroit</option><option value="7362">U Of District Of Columbia</option><option value="0953">U of Exeter (UK)</option><option value="5812">U of Florida</option><option value="1997">U of Frieburg, Germany</option><option value="5813">U of Georgia</option><option value="4867">U of Hawaii</option><option value="6870">U of Houston</option><option value="4843">U of Idaho</option><option value="1836">U of Illinois</option><option value="6681">U of Iowa</option><option value="6871">U of Kansas</option><option value="1837">U of Kentucky</option><option value="1838">U of Louisville</option><option value="3691">U of Maine</option><option value="0973">U of Manitoba (Canada)</option><option value="5814">U of Maryland</option><option value="1850">U of Memphis</option><option value="5815">U of Miami</option><option value="1839">U of Michigan</option><option value="6874">U of Minnesota</option><option value="1840">U of Mississippi</option><option value="9202">U of Missouri</option><option value="6875">U of Missouri - Columbia</option><option value="6872">U of Missouri - Kansas City</option><option value="4489">U of Montana</option><option value="6877">U of Nebraska</option><option value="1979">U of Nevada Las Vegas</option><option value="0976">U of New Brunswick (Canada)</option><option value="4845">U of New Mexico</option><option value="5816">U of North Carolina</option><option value="6878">U of North Dakota</option><option value="9936">U of Northern California</option><option value="1841">U of Notre Dame</option><option value="6879">U of Oklahoma</option><option value="4846">U of Oregon</option><option value="0993">U of Ottawa (Canada)</option><option value="2926">U of Pennsylvania</option><option value="2927">U of Pittsburgh</option><option value="0979">U of Puerto Rico</option><option value="4067">U of Puget Sound (Renamed 8/10/94)</option><option value="5808">U of Richmond</option><option value="4849">U of San Diego</option><option value="4850">U of San Francisco</option><option value="0980">U of Saskatchewan (Canada)</option><option value="5818">U of South Carolina</option><option value="6881">U of South Dakota</option><option value="4852">U of Southern California</option><option value="1976">U of Sydney (Australia)</option><option value="1843">U of Tennessee</option><option value="6882">U of Texas</option><option value="1977">U of the Pacific</option><option value="1845">U of Toledo</option><option value="0982">U of Toronto (Canada)</option><option value="6883">U of Tulsa</option><option value="9925">U of Victoria (Canada)</option><option value="5820">U of Virginia</option><option value="4854">U of Washington</option><option value="4872">U of West Los Angeles</option><option value="9927">U of Western Ontario (Canada)</option><option value="1846">U of Wisconsin</option><option value="9500">U of Witwatersrand (South Africa)</option><option value="4855">U of Wyoming</option><option value="9929">Universidad</option><option value="9950">Universidad Católica del Uruguay</option><option value="9981">Universidad de Monterrey</option><option value="1303">Universidad de Montevideo</option><option value="8334">Universidad de Sonora (Mexico)</option><option value="9949">Universidad Pablo de Olavide</option><option value="9983">University of Dundee</option><option value="6609">University of Law, UK</option><option value="2553">University of Massachusetts School of Law</option><option value="3395">University of New Hampshire School of Law</option><option value="9980">University of Tirana, Albania</option><option value="4853">University of Utah</option><option value="0000">UNKNOWN</option><option value="1874">Valparaiso</option><option value="1871">Vanderbilt</option><option value="4933">Ventura</option><option value="3946">Vermont</option><option value="2959">Villanova</option><option value="5885">Wake Forest</option><option value="6928">Washburn</option><option value="5887">Washington  &amp; Lee</option><option value="6929">Washington U</option><option value="1898">Wayne State</option><option value="5904">West Virginia</option><option value="3962">Western New England</option><option value="8083">Western State</option><option value="4969">Western State - Fullerton</option><option value="4973">Western State - San Diego</option><option value="4028">Whittier</option><option value="8067">Widener</option><option value="4954">Willamette</option><option value="5115">Wm &amp; Mary</option><option value="6942">Wm Mitchell</option><option value="1796">WMU Thomas M Cooley</option><option value="3987">Yale</option><option value="9921">Yeshiva</option><option value="1975">Youngstown State</option></select>
+                            </div>
+                        </div><br>
+
+                        <div class="row">
+                            <div class="col-sm-4">
+                                <label for="lstSection">Section Membership</label>
+                            </div>
+                            <div class="col-sm-8">
+                                <select id="lstSection" class="form-control MoreOptions Search"><option value=""> - any - </option><option value="AD">Administrative Law and Regulatory Practice Section</option><option value="DR">Alternative Dispute Resolution Section</option><option value="AN">Animal Law Section</option><option value="AT">Antitrust Law Section</option><option value="AP">Appellate Practice Section</option><option value="BY">Bankruptcy Law Section</option><option value="BS">Business Law Section</option><option value="CS">Construction Law Section</option><option value="CR">Criminal Justice Section</option><option value="ME">Elder Law, Mental Health and Special Needs Planning Section</option><option value="LA">Employment and Labor Law Section</option><option value="EV">Environmental and Natural Resource Law Section</option><option value="FA">Family Law Section</option><option value="IM">Immigration Law Section</option><option value="IH">In-House Counsel Section</option><option value="ID">Indian Law Section</option><option value="IP">Intellectual Property Law Section</option><option value="IT">International Law Section</option><option value="IE">Internet, E-Commerce and Technology Law Section</option><option value="JV">Juvenile Law Section</option><option value="PT">Probate and Trust Law Section</option><option value="PU">Public Lawyers Section</option><option value="RP">Real Property Law Section</option><option value="RL">Religious Liberty Law Section</option><option value="RS">Securities Regulation Section</option><option value="XP">Sole Practitioner/Small Firm Section</option><option value="TX">Tax Law Section</option><option value="TP">Trial Practice Section</option><option value="WC">Workers' Compensation Section</option><option value="WP">World Peace Through Law Section</option></select>
+                            </div>
+                        </div><br>
+                    </div>
+                    <br>
+                    <div class="row" style="">
+                        <div class="col-sm-10 text-right">
+                            <input type="checkbox" id="chkIncludeDeceased">&nbsp;Include deceased attorneys
+                        </div>
+                        <div class="col-sm-2 text-right">
+                            <button type="button" id="btnSearch" class="btn btn-primary" onclick="Search(false);">Search</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div id="imgPleaseWait" style="height: 100%; width: 100%; z-index: 50000; background-color: rgb(255, 255, 255); opacity: 0.9; text-align: center; display: none;">
+                        <p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p>
+                        <img src="https://gifimage.net/wp-content/uploads/2018/11/please-wait-animated-gif-7.gif" style="margin-top:-25px;margin-left:-25px;" alt="">
+                    </div>
+                    <div id="divContentsResults" style="">
+                        <ul id="ulResultsTabs" role="tablist" class="nav nav-tabs" style="">
+                            <li id="tbAttorneysNav" role="presentation" class="nav-item active"><a href="#tbAttorneys" onclick="SetSearch(false);" aria-controls="tbAttorneys" role="tab" class="nav-link active" data-toggle="tab">Attorneys</a></li>
+                            <li id="tbLegalProfessionalsNav" role="presentation" class="nav-item"><a href="#tbLegalProfessionals" onclick="SetSearch(true);" aria-controls="tbLegalProfessionals" class="nav-link" role="tab" data-toggle="tab">Legal Paraprofessionals</a></li>
+                        </ul>
+
+                        <div id="divResultsTabs" class="tab-content" style="border:solid 1px #dddddd;border-top:none;padding:15px;background-color:#ffffff;">
+                            <div role="tabpanel" class="tab-pane active" id="tbAttorneys">
+                                <div id="divResultsAttorney"><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Julianne Baggett</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="239129" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6"></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Peter Brown</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="205842" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Axon Enterprise Inc.<br></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Gregory Reinhart</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="233772" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Dickinson Wright PLLC<br>40 E RIO SALADO PKWY STE 425<br>TEMPE, AZ 85281-0231<br>greinhart@dickinson-wright.com</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Scott Shimmin</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="166161" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6"></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Timothy Grier</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="135397" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Town of Star Valley <br>3675 E HIGHWAY 260<br>STAR VALLEY, AZ 85541-2449</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Jamie Halavais</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="187040" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Dickinson Wright PLLC<br>1850 N Central Ave Ste 1400<br>Phoenix, AZ 85004-4568</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Monisha Roberts</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="35383" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Bar-S Foods<br></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Linus Everling</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="134638" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Linus Everling<br></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Barry Becker</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="54285" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Barry Becker, P.C.<br>2516 N 3RD ST<br>PHOENIX, AZ 85004-1308<br>barrybeckerlaw@gmail.com</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Sheila Polk</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="49575" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6"><br>sheilapolk@gmail.com</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Elizabeth Reamer</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="165283" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Maricopa County Attorney's Office<br></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/Dashboard/uploads/40513-Profile.jpeg"></div><div class="col-sm-4"><h4>Don Skypeck</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="40513" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Lewis Brisbois Bisgaard &amp; Smith, LLP<br></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Darrell Davis</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="40473" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Clark Hill PLC<br>14850 N Scottsdale Rd Ste 500<br>Scottsdale, AZ 85254-3464</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Mitchell Eisenberg</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="38064" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Maricopa County Attorney's Office<br>225 W MADISON ST<br>PHOENIX, AZ 85003-2141</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Dalva Moellenberg</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="38086" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Gallagher &amp; Kennedy PA<br>2575 E Camelback Rd Ste 1100<br>Phoenix, AZ 85016-9254</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Roy Herrera</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="198346" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Herrera Arellano LLP<br>1001 N CENTRAL AVE STE 404<br>PHOENIX, AZ 85004-1935<br>roy@ha-firm.com</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Jennine Burns</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="194125" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Office of Legal Advocate<br>222 N CENTRAL AVE STE 154<br>PHOENIX, AZ 85004-2452</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/Dashboard/uploads/146793-Profile.jpg"></div><div class="col-sm-4"><h4>John Belanger</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="146793" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Bremer Whyte Brown &amp; O'Meara LLP<br>8950 S 52ND ST STE 201<br>TEMPE, AZ 85284-1043<br>jbelanger@bremerwhyte.com</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/Dashboard/uploads/198296-Profile.JPG"></div><div class="col-sm-4"><h4>Jeffrey Stratman</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="198296" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Stratman Law Office<br><br>jeff.stratman@outlook.com</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Benjamin Shiffer</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="150281" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6"></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Kimberly Mooney</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="39205" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Mooney Law PC<br>1832 S MacDonald Ste 202<br>Mesa, AZ 85210-6115</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Saivignesh Venkat</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="239088" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6"></div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>William Myers</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="205302" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Law Office of William H. Myers III <br>6991 E CAMELBACK RD STE D300<br>SCOTTSDALE, AZ 85251-2492<br>contact@myerslawfirm.net</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/Dashboard/uploads/146323-Profile.jpg"></div><div class="col-sm-4"><h4>Jessica Cotter</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="146323" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6">Jessica Cotter Law<br>14050 N 83RD AVE STE 290<br>PEORIA, AZ 85381-5650</div></div><div class="row" style="border-bottom:solid 1px #e7e7e7;padding-top:4px;"><div class="col-sm-2"><img style="width:100%;" src="https://membertools.azbar.org/dashboard/images/noImageUploaded.gif"></div><div class="col-sm-4"><h4>Caleb Wagner</h4><span style="font-size:.8em;">Active</span><br><br><button type="button" class="btn btn-primary btn-sm" data-id="187637" data-toggle="modal" data-target="#modalDetails">View Profile</button></div><div class="col-sm-6"></div></div></div>
+                                <div class="row"><div class="col-sm-12 text-right" style="font-size:.8em;" id="divAttorneyRecordsCount">Showing 25 of 25 attorney record(s)</div></div>
+                                <div class="text-center"><button type="button" id="btnShowMoreAttorneys" class="btn btn-success ShowMore" onclick="ShowMore(false);" style="display: none;">Show More Results</button></div>
+                            </div>
+                            <div role="tabpanel" class="tab-pane" id="tbLegalProfessionals">
+                                <div id="divResults"></div>
+                                <div class="row"><div class="col-sm-12 text-right" style="font-size:.8em;" id="divLegalParaprofessionalRecordsCount"></div></div>
+                                <div class="text-center"><button type="button" id="btnShowMoreLPs" class="btn btn-success ShowMore" onclick="ShowMore(true);">Show More Results</button></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="divProfileScreen" style="display:none;">
+            <div class="row">
+                <div class="col-sm-12"><h2 id="DetailsLabel"></h2></div>
+            </div><br>
+            <div class="row">
+                <div class="col-sm-5">
+                    <span id="spnProfileCompany" class="ProfileElement"></span><br>
+                    <span id="spnProfileAddress" class="ProfileElement"></span><br>
+                    <span id="spnProfilePhone" class="ProfileElement"></span><br>
+                    <span id="spnProfileEmail" class="ProfileElement"></span>
+                </div>
+                <div class="col-sm-2">
+                    <span id="spnProfileSpecialistImage" class="ProfileElement"></span>
+                </div>
+                <div class="col-sm-2"><span id="spnProfilePhoto" class="ProfileElement"></span></div>
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col-sm-12">
+                    <!--<h5 style="font-size:1em;">Discipline</h5>-->
+                    <div id="divProfileDiscipline" class="ProfileElement"></div>
+                </div>
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col-sm-12">
+                    <h5 style="font-size:1em;">Membership Information</h5>
+                    Status: <span id="spnProfileStatus" class="ProfileElement"></span><br>
+                    <div id="spnCertifiedProBonoCounsel" class="ProfileElement" style="display:none;"></div>
+                    <span class="LicensedAdmittedAdmitYear"></span>: <span id="spnProfileAdmitYear" class="ProfileElement"></span><br>
+                    <span class="LicensedAdmittedAZAdmit"></span> to State Bar of Arizona: <span id="spnProfileAZAdmit" class="ProfileElement"></span><br>
+                    <div class="divLicenseArea"><span class="LicensedAdmittedD"></span> Area: <span id="spnProfileLicenseArea" class="ProfileElement"></span><br></div>
+                    Professional Liability Insurance: <span id="spnProfileInsurance" class="ProfileElement"></span><br>
+                    Board Certified Legal Specializations: <span id="spnProfileSpecializations" class="ProfileElement"></span><br>
+                    Sections: <span id="spnProfileSections" class="ProfileElement"></span>
+                </div>
+            </div>
+            <hr>
+            <div id="divAZBio">
+                <div class="row">
+                    <div class="col-sm-12">
+                        <h5 style="font-size:1em;">Biography</h5>
+                        <div id="divAZBioContents"></div>
+                    </div>
+                </div>
+                <hr>
+            </div>
+            <div class="row">
+                <div class="col-sm-12">
+                    <h5 style="font-size:1em;">Law School</h5>
+                    <span id="spnProfileLawSchool" class="ProfileElement"></span>
+                </div>
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col-sm-12">
+                    <h5 style="font-size:1em;">Jurisdictions</h5>
+                    <span id="spnProfileJurisdictions" class="ProfileElement"></span>
+                </div>
+            </div>
+        </div>        
+    </div>
+    <p>&nbsp;</p><p>&nbsp;</p>
+
+    <!--------  Details View ------->
+    <div class="modal fade" id="modalDetails" tabindex="-1" role="dialog" aria-labelledby="modalDetailsLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="SearchDetailsLabel"></h2>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">×</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-sm-5">
+                            <span id="spnSearchProfileCompany" class="ProfileElement"></span><br>
+                            <span id="spnSearchProfileAddress" class="ProfileElement"></span><br>
+                            <span id="spnSearchProfilePhone" class="ProfileElement"></span><br>
+                            <span id="spnSearchProfileEmail" class="ProfileElement"></span>
+                        </div>                       
+                        <div class="col-sm-2">
+                            <span id="spnSearchProfileSpecialistImage" class="ProfileElement"></span>
+                        </div>
+                        <div class="col-sm-3"><span id="spnSearchProfilePhoto" class="ProfileElement"></span></div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <!--<h5 style="font-size:1em;">Discipline</h5>-->
+                            <div id="divSearchProfileDiscipline" class="ProfileElement"></div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <h5 style="font-size:1em;">Membership Information</h5>
+                            Status: <span id="spnSearchProfileStatus" class="ProfileElement"></span><br>
+                            <span id="spnSearchCertifiedProBonoCounsel" class="ProfileElement" style="">Certified Pro Bono Counsel<br></span>
+                            <span class="LicensedAdmittedAdmitYear"></span>: <span id="spnSearchProfileAdmitYear" class="ProfileElement"></span><br>
+                            <span class="LicensedAdmittedAZAdmit"></span> State Bar of Arizona: <span id="spnSearchProfileAZAdmit" class="ProfileElement"></span><br>
+                            <div class="divLicenseArea"><span class="LicensedAdmittedD"></span> Area: <span id="spnSearchProfileLicenseArea" class="ProfileElement"></span><br></div>
+                            Professional Liability Insurance: <span id="spnSearchProfileInsurance" class="ProfileElement"></span><br>
+                            Board Certified Legal Specializations: <span id="spnSearchProfileSpecializations" class="ProfileElement"></span><br>
+                            Sections: <span id="spnSearchProfileSections" class="ProfileElement"></span>
+                        </div>
+                    </div>
+                    <div id="divBiography">
+                        <hr>
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <h5 style="font-size:1em;">Biography</h5>
+                                <span id="spnSearchProfileBiography" class="ProfileElement"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="divAreasOfLaw" style="display:none;">
+                        <hr>
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <h5 style="font-size:1em;">Areas Of Law</h5>
+                                <span id="spnSearchProfileAreasOfLaw" class="ProfileElement"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <h5 style="font-size:1em;">Law School</h5>
+                            <span id="spnSearchProfileLawSchool" class="ProfileElement"></span>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <h5 style="font-size:1em;">Jurisdictions</h5>
+                            <span id="spnSearchProfileJurisdictions" class="ProfileElement"></span>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <h5 style="font-size:1em;">Other Language(s)</h5>
+                            <span id="spnSearchProfileLanguages" class="ProfileElement"></span>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <div class="row" id="divAdditionalInfo" style="display:none;">
+                        <div class="col-sm-12">
+                            <h5 style="font-size:1em;">Additional Information</h5>
+                            Accepts Credit Cards: <span id="spnSearchProfileAcceptsCreditCards" class="ProfileElement"></span><br>
+                            Free Consultations: <span id="spnSearchProfileFreeConsultations" class="ProfileElement"></span><br>
+                            Typical Hourly Rate: <span id="spnSearchProfileTypicalHourlyRate" class="ProfileElement"></span><br>
+                            Typical Fixed Fee: <span id="spnSearchProfileTypicalFixedFee" class="ProfileElement"></span><br>
+                            Typical Contingency Fee: <span id="spnSearchProfileTypicalContingencyFee" class="ProfileElement"></span>
+                        </div>
+                    </div>
+
+                    <p>&nbsp;</p><p>&nbsp;</p>
+                    <div class="row">
+                        <div class="col-sm-12" id="divLink"></div>
+                    </div>
+                </div>
+                <p>&nbsp;</p><p>&nbsp;</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function GetData(serviceURL, method, data) {
+            var result = {};
+            
+            $.ajax({
+                type: method,
+                beforeSend: function (request) {
+                    request.setRequestHeader("userid", "publictools");
+                    request.setRequestHeader("password", "12B631CC-5922-4EF8-8978-23CF2F32EA8D");
+                },
+                url: serviceURL,
+                data: JSON.stringify(data),
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                async: false,
+                success: function (item) {
+                    result = item;
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert("responseText: " + XMLHttpRequest.responseText + "\n textStatus: " + textStatus + "\n errorThrown: " + errorThrown);
+                }
+            });
+            return result;
+        }
+
+        function GetDataASYNC(serviceURL, method, data, callBack) {
+            var returnObject = new Object();
+            returnObject.IsSuccess = false;
+            returnObject.Error = "";
+            returnObject.Result = "";
+            
+            var x = JSON.stringify(data);
+            
+            var result;
+            $.ajax({
+                type: method,
+                beforeSend: function (request) {
+                    request.setRequestHeader("userid", "publictools");
+                    request.setRequestHeader("password", "12B631CC-5922-4EF8-8978-23CF2F32EA8D");
+                },
+                url: serviceURL,
+                data: JSON.stringify(data),
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                async: true,
+                success: function (item) {
+                    result = item;
+
+                    if (result.IsSuccess) {
+                        returnObject.IsSuccess = result.IsSuccess;
+                        returnObject.Result = result.Result;
+                    }
+                    else {
+                        returnObject.IsSuccess = false;
+
+                    }
+                    returnObject.Error = result.Message;
+
+                    if (callBack && typeof (callBack) === "function") {
+                        callBack(result);
+                    }
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    result = false;
+
+                    console.log(errorThrown);
+                    returnObject.IsSuccess = false;
+                    returnObject.Error = errorThrown;
+                    if (callBack && typeof (callBack) === "function") {
+                        callBack(result);
+                    }
+                }
+            });
+            return result;
+        }
+
+        function LoadStates() {
+            var optionList = "<option value=''> - any - </option>";
+
+            var states = GetStates();
+
+            $.each(states, function (index, item) {
+                optionList += "<option value='" + item.StateCode + "'>" + item.StateDescription + "</option>";
+            });
+
+            $('#lstState').empty().html(optionList);
+        }
+
+        function GetStates() {            
+            return GetData(link + "MemberSearch/States", "GET", {});
+        }
+
+        function LoadCounties() {
+            var optionList = "<option value=''> - any - </option>";
+
+            var counties = GetCounties();
+
+            $.each(counties, function (index, item) {
+                optionList += "<option value='" + item.CountyCode + "'>" + item.CountyName + "</option>";
+            });
+
+            $('#lstCounty').empty().html(optionList);
+        }
+
+        function GetCounties() {
+            return GetData(link + "MemberSearch/Counties", "GET", {});
+        }        
+
+        function LoadJurisdictions() {
+            var optionList = "<option value=''> - any - </option>";
+
+            var counties = GetJurisdictions();
+
+            $.each(counties, function (index, item) {
+                optionList += "<option value='" + item.JurisdictionCode + "'>" + item.JurisdictionDescription + "</option>";
+            });
+
+            $('#lstJurisdiction').empty().html(optionList);
+        }
+
+        function GetJurisdictions() {
+            return GetData(link + "MemberSearch/Jurisdictions", "GET", {});
+        }
+
+        function LoadLanguages() {
+            var optionList = "<option value=''> - any - </option>";
+
+            var languages = GetLanguages();
+
+            $.each(languages, function (index, item) {
+                optionList += "<option value='" + $.trim(item.LanguageCode) + "'>" + item.LanguageDescription + "</option>";
+            });
+
+            $('#lstLanguage').empty().html(optionList);
+        }
+
+        function GetLanguages() {
+            return GetData(link + "MemberSearch/Languages", "GET", {});
+        }
+
+        function LoadLawSchools() {
+            var optionList = "<option value=''> - any - </option>";
+
+            var lawSchools = GetLawSchools();
+
+            $.each(lawSchools, function (index, item) {
+                optionList += "<option value='" + $.trim(item.LawSchoolCode) + "'>" + item.LawSchoolDescription + "</option>";
+            });
+
+            $('#lstLawSchool').empty().html(optionList);
+        }
+
+        function GetLawSchools() {
+            return GetData(link + "MemberSearch/LawSchools", "GET", {});
+        }
+
+        function LoadSpecializations() {
+            var optionList = "<option value=''> - any - </option>";
+
+            var specs = GetSpecializations();
+
+            $.each(specs, function (index, item) {
+                optionList += "<option value='" + $.trim(item.CertifiedSpecializationCode) + "'>" + item.CertifiedSpecializationDescription + "</option>";
+            });
+
+            $('#lstSpecialization').empty().html(optionList);
+        }
+
+        function GetSpecializations() {
+            return GetData(link + "MemberSearch/Specializations", "GET", {});
+        }
+
+        function LoadSections() {
+            var optionList = "<option value=''> - any - </option>";
+
+            var sections = GetSections();
+
+            $.each(sections, function (index, item) {
+                optionList += "<option value='" + $.trim(item.SectionCode) + "'>" + item.SectionDescription + "</option>";
+            });
+
+            $('#lstSection').empty().html(optionList);
+        }
+
+        function GetSections() {
+            return GetData(link + "MemberSearch/Sections", "GET", {});
+        }
+
+        function IsValidZipCode(val) {
+            return /^[0-9]{5}(?:-[0-9]{4})?$/.test(val);
+        }
+
+        function IsValidPostalCode(val) {
+            return /^([A-Z][0-9][A-Z])\s*([0-9][A-Z][0-9])$/.test(val);
+        }
+
+        function NullToString(val) {
+            if (val === null) {
+                return '';
+            }
+            else if (val === undefined) {
+                return '';
+            }
+            else {
+                return $.trim(val);
+            }
+        }
+
+        function GetLiabilityInsuranceText(val)
+        {
+            val = $.trim(val).toUpperCase();
+            if (val === "E")
+            {
+                return "Exempt";
+            }
+            else if (val === "Y")
+            {
+                return "Yes";
+            }
+            else
+            {
+                return "Unknown";
+            }
+        }
+
+        function getUrlVars() {
+            var vars = [], hash;
+            var url = window.location.href.replace('#', '');
+            var hashes = url.slice(url.indexOf('?') + 1).split('&');
+            for (var i = 0; i < hashes.length; i++) {
+                hash = hashes[i].split('=');
+                vars.push(hash[0]);
+                vars[hash[0]] = hash[1];
+            }
+            return vars;
+        }
+
+        function Left(val, l) {
+            if (val.length > l) {
+                return val.substr(0, l);
+            }
+            else {
+                return val;
+            }
+        }
+
+        function Right(val, l) {
+            if (val.length > l) {
+                return val.substr((val.length - l), l);
+            }
+            else {
+                return val;
+            }
+        }
+
+        function FormatCurrency(val, withDollarSign) {
+            if (val === null || val === undefined || val === "") {
+                return "";
+            }
+
+            if (isNaN(val)) {
+                return val;
+            }
+
+            var retNum = String(parseFloat(val).toFixed(2));
+
+            if (retNum.length >= 7 && parseFloat(retNum) > 0) {
+                retNum = insert(retNum, (retNum.length - 6), ',');
+
+                if (retNum.length >= 11) {
+                    retNum = insert(retNum, (retNum.length - 10), ',');
+                }
+
+                if (retNum.length >= 15) {
+                    retNum = insert(retNum, (retNum.length - 14), ',');
+                }
+            }
+
+            if (withDollarSign) {
+                return "$" + retNum;
+            }
+            else {
+                return retNum;
+            }
+        }
+
+        function insert(str, index, value) {
+            return str.substr(0, index) + value + str.substr(index);
+        }
+
+		function GetEntityNumber(){
+			if (EN != null){
+				return EN;
+			};
+		
+			var EntityNumber = getUrlVars()["EntityNumber"];
+			
+			if (EntityNumber != null){
+				return EntityNumber;
+			}
+			
+			if (IsLoggedIn()){
+				window.location = loginLink + "?ReturnURL=" + window.location;
+			}
+		}
+
+		function IsLoggedIn() {
+			var retVal = false;
+
+			$.ajax({
+				type: "GET",
+				crossDomain: true,
+				xhrFields: { withCredentials: true },
+                url: loginLink + "/IsLoggedIn",
+                contentType: "application/json; charset=utf-8",
+                async: false,
+                success: function (data, status, xhr) {
+                    retVal = data;
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    retVal = false;
+                    console.log("responseText: " + XMLHttpRequest.responseText + "\n textStatus: " + textStatus + "\n errorThrown: " + errorThrown);
+                }
+            });
+
+            return retVal;
+		}		
+    </script>
+</div>
+
+
+
+        <hr style="clear:both">
+        
+
+
+
+
+        <div class="footer-ad notmobile" style="text-align:center;">
+            <!-- Revive Adserver Javascript Tag - Generated with Revive Adserver v5.0.1 -->
+            <script type="text/javascript"><!--//<![CDATA[
+               var m3_u = (location.protocol=='https:'?'https://azbarbanners.creativecirclemedia.com/www/delivery/ajs.php':'http://azbarbanners.creativecirclemedia.com/www/delivery/ajs.php');
+               var m3_r = Math.floor(Math.random()*99999999999);
+               if (!document.MAX_used) document.MAX_used = ',';
+               document.write ("<scr"+"ipt type='text/javascript' src='"+m3_u);
+               document.write ("?zoneid=3");
+               document.write ('&amp;cb=' + m3_r);
+               if (document.MAX_used != ',') document.write ("&amp;exclude=" + document.MAX_used);
+               document.write (document.charset ? '&amp;charset='+document.charset : (document.characterSet ? '&amp;charset='+document.characterSet : ''));
+               document.write ("&amp;loc=" + escape(window.location));
+               if (document.referrer) document.write ("&amp;referer=" + escape(document.referrer));
+               if (document.context) document.write ("&context=" + escape(document.context));
+               if (document.mmm_fo) document.write ("&amp;mmm_fo=1");
+               document.write ("'><\/scr"+"ipt>");
+            //]]>--></script><script type="text/javascript" src="https://azbarbanners.creativecirclemedia.com/www/delivery/ajs.php?zoneid=3&amp;cb=91776789846&amp;charset=UTF-8&amp;loc=https%3A//www.azbar.org/for-lawyers/practice-tools-management/member-directory/"></script><a href="https://azbarbanners.creativecirclemedia.com/www/delivery/ck.php?oaparams=2__bannerid=760__zoneid=3__cb=fe9328e2ba__oadest=http%3A%2F%2Fwww.acrisure.com%2Fahern" target="_blank"><img src="https://azbarbanners.creativecirclemedia.com/www/delivery/ai.php?filename=acrisure_az-728x90.png&amp;contenttype=png" width="728" height="90" alt="" title="" border="0"></a><div id="beacon_fe9328e2ba" style="position: absolute; left: 0px; top: 0px; visibility: hidden;"><img src="https://azbarbanners.creativecirclemedia.com/www/delivery/lg.php?bannerid=760&amp;campaignid=373&amp;zoneid=3&amp;loc=https%3A%2F%2Fwww.azbar.org%2Ffor-lawyers%2Fpractice-tools-management%2Fmember-directory%2F&amp;cb=fe9328e2ba" width="0" height="0" alt="" style="width: 0px; height: 0px;"></div>
+<noscript><a href='http://azbarbanners.creativecirclemedia.com/www/delivery/ck.php?n=a2de6ae3&amp;cb=INSERT_RANDOM_NUMBER_HERE' target='_blank'><img src='http://azbarbanners.creativecirclemedia.com/www/delivery/avw.php?zoneid=3&amp;cb=INSERT_RANDOM_NUMBER_HERE&amp;n=a2de6ae3' border='0' alt='' /></a></noscript>
+            <div class="text-muted small">Advertisement</div>
+        </div>
+<div class="pageFooter">
+    <div class="text-center mobile">
+        <ul class="list-inline m-0">
+            <li class="list-inline-item"><a href="https://www.facebook.com/statebaraz" class="text-white" target="_blank"><svg class="svg-inline--fa fa-facebook-f fa-w-10 fa-lg" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="facebook-f" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" data-fa-i2svg=""><path fill="currentColor" d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S260.43 0 225.36 0c-73.22 0-121.08 44.38-121.08 124.72v70.62H22.89V288h81.39v224h100.17V288z"></path></svg><!-- <i class="fab fa-lg fa-facebook-f"></i> --></a></li>
+            <li class="list-inline-item"><a href="https://twitter.com/azstatebar" target="_blank" class="text-white"><svg class="svg-inline--fa fa-twitter fa-w-16 fa-lg" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="twitter" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" data-fa-i2svg=""><path fill="currentColor" d="M459.37 151.716c.325 4.548.325 9.097.325 13.645 0 138.72-105.583 298.558-298.558 298.558-59.452 0-114.68-17.219-161.137-47.106 8.447.974 16.568 1.299 25.34 1.299 49.055 0 94.213-16.568 130.274-44.832-46.132-.975-84.792-31.188-98.112-72.772 6.498.974 12.995 1.624 19.818 1.624 9.421 0 18.843-1.3 27.614-3.573-48.081-9.747-84.143-51.98-84.143-102.985v-1.299c13.969 7.797 30.214 12.67 47.431 13.319-28.264-18.843-46.781-51.005-46.781-87.391 0-19.492 5.197-37.36 14.294-52.954 51.655 63.675 129.3 105.258 216.365 109.807-1.624-7.797-2.599-15.918-2.599-24.04 0-57.828 46.782-104.934 104.934-104.934 30.213 0 57.502 12.67 76.67 33.137 23.715-4.548 46.456-13.32 66.599-25.34-7.798 24.366-24.366 44.833-46.132 57.827 21.117-2.273 41.584-8.122 60.426-16.243-14.292 20.791-32.161 39.308-52.628 54.253z"></path></svg><!-- <i class="fab fa-lg fa-twitter"></i> --></a></li>
+            <li class="list-inline-item"><a href="https://www.linkedin.com/company/state-bar-of-arizona/" class="text-white" target="_blank"><svg class="svg-inline--fa fa-linkedin fa-w-14 fa-lg text-white" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="linkedin" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" data-fa-i2svg=""><path fill="currentColor" d="M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3zM135.4 416H69V202.2h66.5V416zm-33.2-243c-21.3 0-38.5-17.3-38.5-38.5S80.9 96 102.2 96c21.2 0 38.5 17.3 38.5 38.5 0 21.3-17.2 38.5-38.5 38.5zm282.1 243h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9V416z"></path></svg><!-- <i class="fab fa-lg fa-linkedin text-white"></i> --></a></li>
+            <li class="list-inline-item"><a href="https://www.instagram.com/statebarofarizona/" class="text-white" target="_blank"><svg class="svg-inline--fa fa-instagram fa-w-14 fa-lg text-white" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="instagram" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" data-fa-i2svg=""><path fill="currentColor" d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"></path></svg><!-- <i class="fab fa-lg fa-instagram text-white"></i> --></a></li>
+            <li class="list-inline-item ml-2"><a href="/for-lawyers/benefits-services/arizona-attorney-magazine" class="text-white" target="_blank">Arizona Attorney Magazine</a></li>
+        </ul>
+        <hr style="border-color:white;">
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+                <p class="m-0 font-weight-bolder">State Bar of Arizona</p>
+                                <p class="m-0 ml-2 small">4201 N. 24th Street Suite 100<br>Phoenix, AZ 85016-6266</p>
+            <div class="m-0 ml-2 mt-1 small">
+                    <p class="m-0">Phone: 602.252.4804</p>
+                                                    <p class="m-0">Fax: 602.271.4930</p>
+            </div>
+        </div>
+                    <div class="col-md-3">
+                            <h5>FOR THE PUBLIC</h5>
+                                                    <ul class="m-0 p-1" style="list-style: none;">
+                                    <li class="m-0"><a class="text-white" href="/for-the-public/client-protection-fund/">Client Protection Fund</a></li>
+                                    <li class="m-0"><a class="text-white" href="/for-the-public/public-advertising-opportunities/">Advertising Opportunities</a></li>
+                            </ul>
+                    </div>
+                    <div class="col-md-3">
+                            <h5>FOR LAWYERS</h5>
+                                                    <ul class="m-0 p-1" style="list-style: none;">
+                                    <li class="m-0"><a class="text-white" href="/for-lawyers/benefits-services/">Benefits &amp; Services</a></li>
+                                    <li class="m-0"><a class="text-white" href="/for-lawyers/communities/advisory-groups/">Advisory Groups</a></li>
+                                    <li class="m-0"><a class="text-white" href="/for-lawyers/benefits-services/legal-vendors/">Legal Vendors</a></li>
+                            </ul>
+                    </div>
+                    <div class="col-md-3">
+                            <h5>ABOUT US</h5>
+                                                    <ul class="m-0 p-1" style="list-style: none;">
+                                    <li class="m-0"><a class="text-white" href="/about-us/board-of-governors/">Board of Governors</a></li>
+                                    <li class="m-0"><a class="text-white" href="/about-us/mission-vision-core-values/">Mission, Vision, &amp; Core Values</a></li>
+                                    <li class="m-0"><a class="text-white" href="/about-us/careers-at-the-state-bar/">Careers at the State Bar</a></li>
+                            </ul>
+                    </div>
+    </div>
+    <hr style="border-color:white;">
+    <p class="m-0 small text-center">Copyright ©2004-2024</p><p>
+
+</p></div>
+    </div>
